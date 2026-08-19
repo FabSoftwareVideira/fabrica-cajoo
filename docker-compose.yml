@@ -1,0 +1,52 @@
+name: cajoo-dev
+
+services:
+  cajoo-db:
+    container_name: cajoo-dev-db
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      - PGDATA=/var/lib/postgresql/data
+    volumes:
+      - cajoo-dev-data:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "15433:5432"
+    networks:
+      - cajoo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  cajoo-web:
+    container_name: cajoo-dev-web
+    build:
+      context: .
+      target: dev
+    ports:
+      - "13001:3000"
+    depends_on:
+      cajoo-db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - APP_ENV=development
+      - APP_VERSION=dev
+      - POSTGRES_HOST=cajoo-db
+    volumes:
+      # hot reload — monta o código local no container
+      - .:/app
+      - /app/node_modules
+    networks:
+      - cajoo-network
+    restart: unless-stopped
+
+volumes:
+  cajoo-dev-data:
+
+networks:
+  cajoo-network:
+    driver: bridge

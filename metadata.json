@@ -1,0 +1,6 @@
+{
+  "name": "Portal CAJOO - Ciência da Computação",
+  "description": "Portal oficial do Centro Acadêmico de Ciência da Computação (CAJOO)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

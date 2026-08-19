@@ -1,0 +1,69 @@
+name: cajoo
+
+services:
+  cajoo-db:
+    container_name: cajoo-db
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      - PGDATA=/var/lib/postgresql/data
+    volumes:
+      - cajoo_prod_db:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro
+    networks:
+      - cajoo-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  cajoo-web:
+    container_name: cajoo-web
+    build:
+      context: .
+      target: prod
+      args:
+        APP_VERSION: ${APP_VERSION:-latest}
+        APP_ENV: production
+    image: cajoo:${APP_VERSION}
+    pull_policy: build
+    # ports:
+    #   - "9092:3000" # escolha uma porta livre no host, se for expor direto (sem proxy reverso)
+    depends_on:
+      cajoo-db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - APP_ENV=production
+      - APP_VERSION=${APP_VERSION:-latest}
+      - POSTGRES_HOST=cajoo-db
+    labels:
+      - org.opencontainers.image.version=${APP_VERSION:-latest}
+    networks:
+      - cajoo-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+
+volumes:
+  cajoo_prod_db:
+
+networks:
+  cajoo-network:
+    external: true
