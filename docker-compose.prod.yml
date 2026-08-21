@@ -1,17 +1,17 @@
 name: cajoo
 
 services:
-  cajoo-db:
-    container_name: cajoo-db
+  fabrica-cajoo-prod-db:
+    container_name: fabrica-cajoo-prod-db
     image: postgres:16-alpine
     env_file: .env
     environment:
       - PGDATA=/var/lib/postgresql/data
     volumes:
-      - cajoo_prod_db:/var/lib/postgresql/data
+      - fabrica-cajoo-prod-db:/var/lib/postgresql/data
       - ./db:/docker-entrypoint-initdb.d:ro
     networks:
-      - cajoo-network
+      - fabrica-network
     restart: always
     deploy:
       resources:
@@ -27,8 +27,8 @@ services:
       timeout: 5s
       retries: 3
 
-  cajoo-web:
-    container_name: cajoo-web
+  fabrica-cajoo-prod-web:
+    container_name: fabrica-cajoo-prod-web
     build:
       context: .
       target: prod
@@ -40,17 +40,17 @@ services:
     # ports:
     #   - "9092:3000" # escolha uma porta livre no host, se for expor direto (sem proxy reverso)
     depends_on:
-      cajoo-db:
+      fabrica-cajoo-prod-db:
         condition: service_healthy
     env_file: .env
     environment:
       - APP_ENV=production
       - APP_VERSION=${APP_VERSION:-latest}
-      - POSTGRES_HOST=cajoo-db
+      - POSTGRES_HOST=fabrica-cajoo-prod-db
     labels:
       - org.opencontainers.image.version=${APP_VERSION:-latest}
     networks:
-      - cajoo-network
+      - fabrica-network
     restart: always
     deploy:
       resources:
@@ -62,8 +62,8 @@ services:
           memory: 128M
 
 volumes:
-  cajoo_prod_db:
+  fabrica-cajoo-prod-db:
 
 networks:
-  cajoo-network:
+  fabrica-network:
     external: true
