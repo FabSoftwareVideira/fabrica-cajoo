@@ -27,13 +27,13 @@ docker compose up
 ```
 
 O sistema ficará disponível em:
-http://localhost:130001
+http://localhost:3000
 
 Para fechar o programa:
+
 ```bash
 docker compose down -v
 ```
-
 
 ## Equipe de Desenvolvimento
 
@@ -42,5 +42,3 @@ Projeto desenvolvido pelos alunos do curso de Ciência da Computação para o Ce
 ## 📜 Licença
 
 > Este projeto possui finalidade acadêmica e institucional.
-
-
