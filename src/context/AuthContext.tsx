@@ -1,71 +1,75 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User } from '../types';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import type { User } from '../types';
+import { api, setCsrf, errorMessage } from '../lib/api';
 
+interface Session {
+  user: User | null;
+  csrf: string;
+}
 interface AuthContextType {
   user: User | null;
-  login: (email: string, pass: string) => Promise<{ success: boolean; message?: string }>;
-  logout: () => void;
-  isAuthenticated: boolean;
+  loading: boolean;
+  error: string;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<void>;
+  changePassword: (currentPassword: string, password: string) => Promise<void>;
 }
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const STORAGE_KEY = 'cajoo_auth_user';
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AuthContext = createContext<AuthContextType | null>(null);
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setUser(JSON.parse(saved));
-      } catch (e) {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const apply = useCallback((session: Session) => {
+    setUser(session.user);
+    setCsrf(session.csrf);
+    setError('');
   }, []);
-
-  const login = async (email: string, pass: string): Promise<{ success: boolean; message?: string }> => {
-    // Simulating authentication check
-    if (!email.includes('@')) {
-      return { success: false, message: 'Digite um e-mail válido.' };
+  const refresh = useCallback(async () => {
+    try {
+      apply(await api<Session>('/auth/session'));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setLoading(false);
     }
-    if (pass.length < 4) {
-      return { success: false, message: 'A senha deve ter pelo menos 4 caracteres.' };
+  }, [apply]);
+  useEffect(() => {
+    try {
+      localStorage.removeItem('cajoo_auth_user');
+    } catch {
+      /* Armazenamento local desabilitado. */
     }
-
-    // Default mock user
-    const mockUser: User = {
-      id: 'usr_' + Date.now(),
-      name: email.split('@')[0].toUpperCase(),
-      email: email,
-      role: email.includes('ca') || email.includes('admin') ? 'member' : 'student',
-      matricula: '2025100' + Math.floor(Math.random() * 899 + 100),
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+    void refresh();
+    const update = () => {
+      void refresh();
     };
-
-    setUser(mockUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser));
-    return { success: true };
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
-  };
-
+    const expired = () => apply({ user: null, csrf: '' });
+    window.addEventListener('focus', update);
+    window.addEventListener('cajoo:unauthorized', expired);
+    return () => {
+      window.removeEventListener('focus', update);
+      window.removeEventListener('cajoo:unauthorized', expired);
+    };
+  }, [refresh, apply]);
+  async function login(email: string, password: string) {
+    apply(await api<Session>('/auth/login', 'POST', { email, password }));
+  }
+  async function logout() {
+    await api('/auth/logout', 'POST');
+    apply({ user: null, csrf: '' });
+  }
+  async function changePassword(currentPassword: string, password: string) {
+    apply(await api<Session>('/auth/password', 'PUT', { currentPassword, password }));
+  }
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, loading, error, login, logout, refresh, changePassword }}>
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
-  }
-  return context;
-};
+}
+export function useAuth() {
+  const value = useContext(AuthContext);
+  if (!value) throw new Error('AuthProvider ausente');
+  return value;
+}

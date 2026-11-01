@@ -9,20 +9,19 @@ services:
       - PGDATA=/var/lib/postgresql/data
     volumes:
       - fabrica-cajoo-prod-db:/var/lib/postgresql/data
-      - ./db:/docker-entrypoint-initdb.d:ro
     networks:
       - fabrica-network
     restart: always
     deploy:
       resources:
         limits:
-          cpus: "0.75"
+          cpus: '0.75'
           memory: 512M
         reservations:
-          cpus: "0.10"
+          cpus: '0.10'
           memory: 256M
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
       interval: 5s
       timeout: 5s
       retries: 3
@@ -35,8 +34,7 @@ services:
       args:
         APP_VERSION: ${APP_VERSION:-latest}
         APP_ENV: production
-    image: cajoo:${APP_VERSION}
-    pull_policy: build
+    image: fabrica-cajoo:${APP_VERSION:-latest}
     # ports:
     #   - "9092:3000" # escolha uma porta livre no host, se for expor direto (sem proxy reverso)
     depends_on:
@@ -45,21 +43,40 @@ services:
     env_file: .env
     environment:
       - APP_ENV=production
+      - PORT=3000
+      - PUBLIC_ORIGIN=${PUBLIC_ORIGIN:-https://cajoo.fsw-ifc.brdrive.cloud}
       - APP_VERSION=${APP_VERSION:-latest}
       - POSTGRES_HOST=fabrica-cajoo-prod-db
+      - POSTGRES_PORT=5432
     labels:
       - org.opencontainers.image.version=${APP_VERSION:-latest}
+      - org.opencontainers.image.revision=${APP_REVISION:-local}
     networks:
       - fabrica-network
     restart: always
     deploy:
       resources:
         limits:
-          cpus: "0.75"
+          cpus: '0.75'
           memory: 512M
         reservations:
-          cpus: "0.10"
+          cpus: '0.10'
           memory: 128M
+
+  fabrica-cajoo-migrate:
+    profiles: ['tools']
+    build:
+      context: .
+      target: migrate
+    image: fabrica-cajoo-migrate:${APP_VERSION:-latest}
+    env_file: .env
+    environment:
+      POSTGRES_HOST: fabrica-cajoo-prod-db
+      POSTGRES_PORT: 5432
+      APP_VERSION: ${APP_VERSION:-latest}
+    networks:
+      - fabrica-network
+    restart: 'no'
 
 volumes:
   fabrica-cajoo-prod-db:

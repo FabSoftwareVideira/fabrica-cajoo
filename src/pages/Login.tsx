@@ -1,158 +1,105 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { User as UserIcon, Lock, LogIn, LogOut } from 'lucide-react';
-
-import { useAuth } from '../context/AuthContext';
+import { LogIn, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Link, Navigate } from 'react-router-dom';
 import { CajooLogo } from '../components/CajooLogo';
-import { CyberCard } from '../components/CyberCard';
-import { NeonButton } from '../components/NeonButton';
-import { HeroParticles } from '../components/HeroParticles';
+import { useAuth } from '../context/AuthContext';
+import { errorMessage } from '../lib/api';
 
-export const Login: React.FC = () => {
+export function Login() {
+  const auth = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const { user, login, logout } = useAuth();
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    setLoading(true);
-
-    const res = await login(email, password);
-    setLoading(false);
-
-    if (res.success) {
-      navigate('/');
-    } else {
-      setErrorMsg(res.message || 'Erro ao realizar login.');
+  const [visible, setVisible] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await auth.login(email, password);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
     }
-  };
-
-  return (
-    <div className="pt-28 pb-16 flex items-center justify-center min-h-[85vh] px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Ambient Glows */}
-      <motion.div 
-        animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.7, 0.4] }}
-        transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-125 h-125 bg-purple-600/15 blur-[140px] pointer-events-none rounded-full" 
-      />
-      <HeroParticles />
-      
-      <div className="max-w-md w-full relative z-10">
-        
-        {/* If user is already authenticated */}
-        {user ? (
-          <CyberCard className="text-center space-y-6">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden border border-indigo-400/40 mx-auto">
-              <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-            </div>
-
-            <div className="space-y-1">
-              <span className="px-3 py-1 text-[10px] font-mono uppercase rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/30">
-                {user.role === 'member' ? 'Membro da Diretoria CA' : 'Estudante Autenticado'}
-              </span>
-              <h2 className="text-xl font-bold text-white pt-2">{user.name}</h2>
-              <p className="text-xs text-slate-400">{user.email}</p>
-              {user.matricula && (
-                <p className="text-[11px] text-slate-500">Matrícula: {user.matricula}</p>
-              )}
-            </div>
-
-            <div className="pt-4 border-t border-white/10 space-y-2">
-              <NeonButton
-                variant="primary"
-                fullWidth
-                onClick={() => navigate('/')}
-              >
-                Acessar Portal Principal
-              </NeonButton>
-
-              <NeonButton
-                variant="danger"
-                fullWidth
-                onClick={logout}
-                icon={<LogOut className="w-4 h-4" />}
-              >
-                Sair da Conta
-              </NeonButton>
-            </div>
-          </CyberCard>
-        ) : (
-          
-          /* Login Form */
-          <CyberCard className="space-y-6">
-            <div className="text-center space-y-2">
-              <CajooLogo size="md" className="justify-center" />
-              <h1 className="text-lg font-bold text-white pt-2">
-                Acesso de Membros do CA
-              </h1>
-              <p className="text-xs text-slate-400 font-sans">
-                Entre com suas credenciais do CAJOO para acessar o portal administrativo.
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  E-mail Acadêmico
-                </label>
-                <div className="relative">
-                  <UserIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu.email@estudante.ifc.edu.br"
-                    className="w-full bg-[#080911] border border-white/10 focus:border-indigo-400 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Senha
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-[#080911] border border-white/10 focus:border-indigo-400 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition-colors"
-                  />
-                </div>
-              </div>
-
-              {errorMsg && (
-                <p className="text-xs text-rose-300 bg-rose-950/50 p-2.5 rounded-xl border border-rose-500/30">
-                  {errorMsg}
-                </p>
-              )}
-
-              <NeonButton
-                variant="primary"
-                type="submit"
-                fullWidth
-                disabled={loading}
-                icon={<LogIn className="w-4 h-4" />}
-              >
-                {loading ? 'Autenticando...' : 'Entrar no Portal'}
-              </NeonButton>
-            </form>
-          </CyberCard>
-        )}
-
+  }
+  if (auth.loading)
+    return (
+      <div className="site-container page-stack" role="status">
+        Carregando sua sessão…
       </div>
-
+    );
+  if (auth.user) return <Navigate to="/dashboard" replace />;
+  return (
+    <div className="login-layout site-container">
+      <div className="login-intro">
+        <span className="eyebrow">Nos bastidores do CAJOO</span>
+        <h1 className="hero-title">
+          Sua equipe.
+          <br />
+          Suas ideias.
+          <br />
+          <span className="gradient-text">Tudo conectado.</span>
+        </h1>
+        <p className="section-copy">
+          Um espaço para cuidar da comunidade, compartilhar novidades e guardar os nossos melhores momentos.
+        </p>
+        <Link to="/" className="feature-link mt-8">
+          <ArrowLeft size={18} />
+          Voltar ao portal
+        </Link>
+      </div>
+      <section className="login-card">
+        <CajooLogo size="md" />
+        <h2 className="text-3xl font-bold mt-6">Bom ter você aqui.</h2>
+        <p className="text-zinc-400 mt-2 mb-7">Entre para acessar o painel da gestão.</p>
+        <form onSubmit={submit} className="form-stack">
+          <label className="field">
+            E-mail
+            <input
+              type="email"
+              autoComplete="username"
+              required
+              maxLength={254}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+            />
+          </label>
+          <label className="field">
+            Senha
+            <div className="password-input">
+              <input
+                aria-label="Senha"
+                type={visible ? 'text' : 'password'}
+                autoComplete="current-password"
+                required
+                maxLength={128}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                aria-label={visible ? 'Ocultar senha' : 'Mostrar senha'}
+                onClick={() => setVisible(!visible)}
+              >
+                {visible ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+          </label>
+          {(error || auth.error) && (
+            <p role="alert" className="feedback-error">
+              {error || auth.error}
+            </p>
+          )}
+          <button className="button-primary w-full" disabled={busy}>
+            {busy ? 'Entrando…' : 'Entrar no painel'}
+            <LogIn size={19} />
+          </button>
+        </form>
+        <p className="text-sm text-zinc-500 mt-6">O acesso é cadastrado pela administração do CA.</p>
+      </section>
     </div>
   );
-};
-
+}

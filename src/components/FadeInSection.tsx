@@ -24,6 +24,14 @@ export const FadeInSection: React.FC<FadeInSectionProps> = ({
     const el = domRef.current;
     if (!el) return;
 
+    if (
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      !('IntersectionObserver' in window)
+    ) {
+      setIsVisible(true);
+      return;
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -40,7 +48,7 @@ export const FadeInSection: React.FC<FadeInSectionProps> = ({
       {
         threshold,
         rootMargin: '0px 0px -40px 0px',
-      }
+      },
     );
 
     observer.observe(el);
@@ -60,9 +68,9 @@ export const FadeInSection: React.FC<FadeInSectionProps> = ({
       case 'down':
         return '-translate-y-10 opacity-0 scale-[0.98]';
       case 'left':
-        return 'translate-x-10 opacity-0';
+        return 'sm:translate-x-6 opacity-0';
       case 'right':
-        return '-translate-x-10 opacity-0';
+        return 'sm:-translate-x-6 opacity-0';
       case 'none':
         return 'opacity-0 scale-95';
       default:
@@ -74,7 +82,7 @@ export const FadeInSection: React.FC<FadeInSectionProps> = ({
     <div
       ref={domRef}
       style={{ transitionDelay: `${delay}ms` }}
-      className={`transition-all duration-700 ease-out will-change-transform ${getDirectionClass()} ${className}`}
+      className={`min-w-0 transition-all duration-700 ease-out ${getDirectionClass()} ${className}`}
     >
       {children}
     </div>

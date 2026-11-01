@@ -1,5 +1,5 @@
-import React from 'react';
 import { motion } from 'motion/react';
+import React from 'react';
 
 interface CyberCardProps {
   children: React.ReactNode;
@@ -15,7 +15,7 @@ export const CyberCard: React.FC<CyberCardProps> = ({
   className = '',
   hoverScale = true,
   onClick,
-  badge
+  badge,
 }) => {
   return (
     <motion.div
@@ -31,7 +31,7 @@ export const CyberCard: React.FC<CyberCardProps> = ({
     >
       {badge && (
         <div className="absolute top-4 right-4 z-10">
-          <span className="px-2.5 py-0.5 text-[10px] font-sans font-semibold tracking-wider uppercase rounded-full bg-zinc-800/80 text-zinc-300 border border-zinc-700/60">
+          <span className="px-2.5 py-0.5 text-sm font-sans font-semibold tracking-wider uppercase rounded-full bg-zinc-800/80 text-zinc-300 border border-zinc-700/60">
             {badge}
           </span>
         </div>
@@ -41,6 +41,3 @@ export const CyberCard: React.FC<CyberCardProps> = ({
     </motion.div>
   );
 };
-
-
-

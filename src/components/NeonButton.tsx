@@ -1,7 +1,7 @@
+import { motion, type HTMLMotionProps } from 'motion/react';
 import React from 'react';
-import { motion } from 'motion/react';
 
-interface NeonButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface NeonButtonProps extends Omit<HTMLMotionProps<'button'>, 'children'> {
   variant?: 'primary' | 'secondary' | 'outline' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   children: React.ReactNode;
@@ -24,9 +24,9 @@ export const NeonButton: React.FC<NeonButtonProps> = ({
   ...props
 }) => {
   const sizeStyles = {
-    sm: 'px-3 py-1.5 text-xs font-semibold gap-1.5 rounded-xl',
-    md: 'px-5 py-2.5 text-xs font-bold gap-2 rounded-xl',
-    lg: 'px-6 py-3 text-sm font-bold gap-2.5 rounded-xl'
+    sm: 'px-3 py-1.5 text-base font-semibold gap-1.5 rounded-xl',
+    md: 'px-5 py-2.5 text-base font-bold gap-2 rounded-xl',
+    lg: 'px-6 py-3 text-base font-bold gap-2.5 rounded-xl',
   };
 
   const variantStyles = {
@@ -49,7 +49,7 @@ export const NeonButton: React.FC<NeonButtonProps> = ({
     danger: `
       bg-rose-950/60 text-rose-200
       border border-rose-800/40 hover:bg-rose-900/70 hover:text-white
-    `
+    `,
   };
 
   return (
@@ -75,5 +75,3 @@ export const NeonButton: React.FC<NeonButtonProps> = ({
     </motion.button>
   );
 };
-
-

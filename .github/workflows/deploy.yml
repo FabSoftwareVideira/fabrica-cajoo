@@ -2,120 +2,89 @@ name: Continuous Deployment
 
 on:
   push:
-    branches:
-      - main
-    tags:
-      - "v*"
+    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      database_only:
+        description: 'Aplicar apenas SQLs, sem atualizar o container web'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# Não interromper uma migração por causa de outro push.
+concurrency:
+  group: fabrica-cajoo-production
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
 env:
-  APP_DIR: .
-  # ⚠️ Altere para o nome do seu projeto
-  PROJECT_NAME: fabrica-cajoo # Exemplo: "fabrica-template"
   COMPOSE_FILE: docker-compose.prod.yml
 
 jobs:
   deploy:
-    name: 🚀 Deploy ${{ github.event.repository.name }}
+    name: Atualizar CAJOO na BRDrive
     runs-on: self-hosted
-
     steps:
-      - name: 📂 Checkout do Código
+      - name: Checkout (inclui db/migrations e scripts)
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: 🔄 Atualizar tags Git locais
-        working-directory: ${{ env.APP_DIR }}
-        run: git fetch --force --tags origin
-
-      - name: 🏷️ Definir versão
-        working-directory: ${{ env.APP_DIR }}
+      - name: Detectar atualização exclusiva do banco
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DATABASE_ONLY_INPUT: ${{ inputs.database_only }}
         run: |
-          if [[ -n "${{ github.event.inputs.image_tag }}" ]]; then
-            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
-            echo "🔁 Rollback para: ${IMAGE_TAG}"
-          else
-            IMAGE_TAG="$(git describe --tags --always 2>/dev/null || echo '')"
-            if [[ -z "${IMAGE_TAG}" ]]; then
-              IMAGE_TAG="v0.0.1-prod-$(git rev-parse --short HEAD)"
-            fi
-            if [[ ! "${IMAGE_TAG}" =~ ^v ]]; then
-              IMAGE_TAG="v0.0.1-prod-${IMAGE_TAG}"
-            fi
+          set -euo pipefail
+          DATABASE_ONLY=false
+          DEPLOYED_SHA=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' fabrica-cajoo-prod-web 2>/dev/null || true)
+          if [[ "$DATABASE_ONLY_INPUT" == 'true' ]]; then
+            DATABASE_ONLY=true
+          elif [[ "$EVENT_NAME" == 'push' && "$DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            && git cat-file -e "$DEPLOYED_SHA^{commit}" 2>/dev/null; then
+            # SQLs estão na imagem de migração; não há motivo para reiniciar o site.
+            OTHER_CHANGES=$(git diff --name-only "$DEPLOYED_SHA" "$GITHUB_SHA" -- . ':!db/**' ':!scripts/migrate.js')
+            if [[ -z "$OTHER_CHANGES" ]]; then DATABASE_ONLY=true; fi
           fi
+          echo "DATABASE_ONLY=$DATABASE_ONLY" >> "$GITHUB_ENV"
 
-          echo "✅ APP_VERSION: ${IMAGE_TAG}"
-          echo "APP_VERSION=${IMAGE_TAG}" >> "$GITHUB_ENV"
-
-      - name: 📄 Criar arquivo .env
-        working-directory: ${{ env.APP_DIR }}
+      - name: Definir versão e preparar ambiente
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
         run: |
-          printf '%s\n' "${{ secrets.ENV_FILE }}" \
-            | grep -vE '^(APP_VERSION|APP_ENV)=' > .env
-          {
-            echo "APP_VERSION=${APP_VERSION}"
-            echo "APP_ENV=production"
-          } >> .env
+          set -euo pipefail
+          test -n "$ENV_FILE" || { echo 'Secret ENV_FILE não configurado'; exit 1; }
+          umask 077
+          APP_VERSION="sha-${GITHUB_SHA:0:12}"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          printf '%s\n' "$ENV_FILE" | sed '/^APP_VERSION=/d; /^APP_ENV=/d; /^APP_REVISION=/d' > .env
+          printf '\nAPP_VERSION=%s\nAPP_ENV=production\nAPP_REVISION=%s\n' "$APP_VERSION" "$GITHUB_SHA" >> .env
+          docker compose -f "$COMPOSE_FILE" config --quiet
 
-      - name: 🛠️ Validar ambiente e arquivos
-        working-directory: ${{ env.APP_DIR }}
-        run: |
-          test -f ${{ env.COMPOSE_FILE }} \
-            || (echo "ERRO: ${{ env.COMPOSE_FILE }} não encontrado" && exit 1)
-          docker compose -f ${{ env.COMPOSE_FILE }} config -q
+      - name: Preparar executor com os SQLs atualizados
+        run: docker compose -f "$COMPOSE_FILE" build fabrica-cajoo-migrate
 
-      - name: 🔁 Rollback — checar imagem local
-        if: ${{ github.event.inputs.image_tag != '' }}
-        run: |
-          IMAGE="${PROJECT_NAME}:${{ github.event.inputs.image_tag }}"
-          if docker image inspect "${IMAGE}" > /dev/null 2>&1; then
-            echo "✅ Imagem local encontrada: ${IMAGE}"
-            echo "SKIP_BUILD=true" >> "$GITHUB_ENV"
-          else
-            echo "⚠️ Imagem ${IMAGE} não encontrada localmente — será feito rebuild"
-            echo "SKIP_BUILD=false" >> "$GITHUB_ENV"
-          fi
+      - name: Preparar site
+        if: ${{ env.DATABASE_ONLY != 'true' }}
+        run: docker compose -f "$COMPOSE_FILE" build fabrica-cajoo-prod-web
 
-      - name: 🏗️ Build da imagem
-        if: ${{ env.SKIP_BUILD != 'true' }}
-        working-directory: ${{ env.APP_DIR }}
-        run: |
-          echo "Building ${PROJECT_NAME}:${APP_VERSION}..."
-          docker compose -f ${{ env.COMPOSE_FILE }} build fabrica-cajoo-prod-web
+      - name: Garantir banco disponível sem recriar o container existente
+        run: docker compose -f "$COMPOSE_FILE" up -d --no-recreate --wait --wait-timeout 120 fabrica-cajoo-prod-db
 
-      - name: 🐳 Atualizar e subir containers
-        working-directory: ${{ env.APP_DIR }}
-        run: |
-          echo "Parando containers existentes..."
-          docker compose -f ${{ env.COMPOSE_FILE }} down --timeout 30
+      - name: Consultar histórico e aplicar migrações pendentes
+        # Falhas interrompem o job antes de substituir o site em execução.
+        run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps fabrica-cajoo-migrate
 
-          echo "Iniciando serviços..."
-          # --no-build garante que usa a imagem já buildada no step anterior
-          docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans --no-build
+      - name: Atualizar somente o site
+        if: ${{ env.DATABASE_ONLY != 'true' }}
+        run: docker compose -f "$COMPOSE_FILE" up -d --no-deps --no-build --wait --wait-timeout 120 fabrica-cajoo-prod-web
 
-      - name: 📊 Status final
-        working-directory: ${{ env.APP_DIR }}
-        run: |
-          echo "--- Containers Ativos ---"
-          docker compose -f ${{ env.COMPOSE_FILE }} ps
-
-          echo "--- Consumo de Recursos ---"
-          CONTAINER_IDS=$(docker ps -q --filter "label=com.docker.compose.project=${{ env.PROJECT_NAME }}")
-          if [ -n "$CONTAINER_IDS" ]; then
-            docker stats --no-stream $CONTAINER_IDS
-          else
-            echo "Nenhum container encontrado para o projeto ${{ env.PROJECT_NAME }}"
-          fi
-
-      - name: 🧹 Limpeza de imagens antigas
+      - name: Status final
         if: always()
-        run: |
-          # Mantém as 3 imagens mais recentes, remove o resto
-          docker images ${PROJECT_NAME} --format "{{.Tag}}" \
-            | tail -n +4 \
-            | xargs -r -I {} docker rmi ${PROJECT_NAME}:{} || true
-          docker image prune -f
+        run: docker compose -f "$COMPOSE_FILE" ps

@@ -2,9 +2,24 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'student' | 'member' | 'admin';
-  matricula?: string;
-  avatar?: string;
+  role: 'member' | 'admin';
+  mustChangePassword: boolean;
+  hasAccess: boolean;
+  position: string;
+  photoUrl: string;
+  bio: string;
+  visible: boolean;
+  order: number;
+  year: number;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  photoUrl: string;
+  bio: string;
+  year: number;
 }
 
 export interface Comunicado {
@@ -51,6 +66,7 @@ export interface EventoGaleria {
   galleryImages: string[];
   description: string;
   location: string;
+  featured?: boolean;
 }
 
 export interface StatItem {
